@@ -1,0 +1,1296 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>لعبة المافيا أونلاين - GitHub Pages Edition</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;900&display=swap" rel="stylesheet">
+    <!-- MQTT Client Library for Serverless Realtime Multiplayer on GitHub Pages -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mqtt/4.3.7/mqtt.min.js"></script>
+
+    <style>
+        body {
+            font-family: 'Tajawal', sans-serif;
+            background-color: #08090d;
+            color: #e2e8f0;
+            overflow-x: hidden;
+        }
+        .mafia-card {
+            background: linear-gradient(145deg, #121624, #0a0c14);
+            border: 1px solid rgba(239, 68, 68, 0.25);
+            box-shadow: 0 15px 35px -10px rgba(0, 0, 0, 0.85);
+        }
+        .glow-red { box-shadow: 0 0 30px rgba(220, 38, 38, 0.3); }
+        .glow-gold { box-shadow: 0 0 30px rgba(234, 179, 8, 0.3); }
+        .glow-blue { box-shadow: 0 0 30px rgba(59, 130, 246, 0.3); }
+        .custom-scrollbar::-webkit-scrollbar { width: 5px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #0f172a; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between p-3 md:p-6 select-none bg-slate-950">
+
+    <header class="text-center py-3 border-b border-red-900/40 mb-4 max-w-3xl mx-auto w-full flex items-center justify-between px-2">
+        <div class="flex items-center gap-2">
+            <span id="p2p-status-badge" class="bg-emerald-950/80 border border-emerald-700/60 text-emerald-400 px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5">
+                <span id="p2p-status-dot" class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                <span id="p2p-status-text">شبكة سريعة أونلاين</span>
+            </span>
+
+            <div id="room-badge" class="hidden bg-red-950/80 border border-red-700/60 px-3 py-1.5 rounded-xl text-xs font-bold text-red-300 flex items-center gap-2 shadow-inner">
+                <span>رمز الغرفة: <strong id="header-room-code" class="text-amber-400 font-mono tracking-widest text-sm">--</strong></span>
+                <button onclick="copyRoomCode()" class="hover:text-white transition text-amber-400" title="نسخ رمز الغرفة">
+                    <i class="fa-solid fa-copy"></i>
+                </button>
+            </div>
+        </div>
+
+        <button id="btn-leave-room" onclick="leaveRoom()" class="hidden bg-slate-800 hover:bg-red-900/80 text-gray-300 hover:text-white px-3 py-1.5 rounded-xl text-xs font-bold border border-slate-700 transition">
+            <i class="fa-solid fa-right-from-bracket ml-1"></i> خروج
+        </button>
+    </header>
+
+    <main class="max-w-2xl mx-auto w-full flex-grow flex flex-col justify-center">
+
+        <!-- Landing Screen -->
+        <div id="screen-landing" class="mafia-card p-6 md:p-8 rounded-2xl glow-red space-y-6">
+            <div class="text-center space-y-2">
+                <h2 class="text-2xl md:text-3xl font-black text-white">حرب المافيا أونلاين 🎭</h2>
+                <p class="text-gray-400 text-xs md:text-sm">العب مع أصدقائك مباشرة مجاناً - جاهزة 100% لـ GitHub Pages!</p>
+            </div>
+
+            <!-- Avatar Selector -->
+            <div class="space-y-2">
+                <label class="block text-xs font-bold text-amber-400">اختر شكل لاعبك (الأفاتار):</label>
+                <div id="avatar-selector" class="flex justify-center gap-2 py-1 overflow-x-auto">
+                    <!-- Avatars dynamically generated -->
+                </div>
+            </div>
+
+            <div class="space-y-4 pt-1">
+                <div>
+                    <label class="block text-xs font-bold text-gray-300 mb-1">اسمك داخل اللعبة:</label>
+                    <input type="text" id="input-player-name" placeholder="أدخل اسمك هنا..." maxlength="15"
+                           class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-red-500 font-bold text-sm">
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
+                    <button onclick="createRoom()" class="bg-gradient-to-r from-red-700 to-red-900 hover:from-red-600 hover:to-red-800 text-white font-bold py-3.5 rounded-xl text-sm shadow-lg transition flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-plus-circle"></i> إنشاء غرفة جديدة
+                    </button>
+                    
+                    <div class="flex gap-2">
+                        <input type="text" id="input-room-code" placeholder="رمز الغرفة..." maxlength="6"
+                               class="w-1/2 bg-slate-900 border border-slate-700 rounded-xl px-2 py-2 text-center text-amber-400 font-mono font-bold tracking-widest focus:outline-none focus:border-amber-500 uppercase text-sm">
+                        <button onclick="joinRoom()" class="w-1/2 bg-slate-800 hover:bg-slate-700 text-amber-400 border border-slate-600 font-bold py-3.5 rounded-xl text-xs transition flex items-center justify-center gap-1">
+                            <i class="fa-solid fa-right-to-bracket"></i> انضمام
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Lobby Screen -->
+        <div id="screen-lobby" class="hidden mafia-card p-6 rounded-2xl space-y-6">
+            <div class="text-center space-y-1">
+                <div class="inline-block bg-amber-950/80 border border-amber-700/50 px-3 py-1 rounded-full text-amber-300 text-xs font-bold mb-1">
+                    <i class="fa-solid fa-door-open ml-1"></i> غرفة الانتظار
+                </div>
+                <h2 class="text-2xl font-bold text-white">رمز الغرفة: <span id="lobby-code-display" class="text-amber-400 font-mono tracking-widest">------</span></h2>
+                <p class="text-gray-400 text-xs">شارك هذا الرمز مع أصدقائك للانضمام من هواتفهم</p>
+            </div>
+
+            <!-- Player List -->
+            <div class="space-y-2">
+                <div class="flex justify-between items-center text-xs text-gray-400 font-bold px-1">
+                    <span>اللاعبون المنضمون حالياً:</span>
+                    <span id="lobby-player-count" class="text-amber-400 font-mono">0/14</span>
+                </div>
+                <div id="lobby-players-container" class="grid grid-cols-2 gap-2 p-3 bg-slate-950/80 rounded-xl border border-slate-800 min-h-[120px] max-h-[220px] overflow-y-auto custom-scrollbar">
+                    <!-- Dynamic player chips -->
+                </div>
+            </div>
+
+            <!-- Role Distribution Summary -->
+            <div class="bg-slate-900/80 p-3.5 rounded-xl border border-slate-800 space-y-2 text-xs">
+                <div class="font-bold text-gray-300 flex justify-between">
+                    <span>الأدوار الأساسية الموزعة تلقائياً:</span>
+                    <span class="text-amber-400 font-normal">الحد الأدنى 4 لاعبين</span>
+                </div>
+                <div class="grid grid-cols-4 gap-1.5 text-center">
+                    <div class="bg-red-950/50 border border-red-800/40 p-2 rounded-lg text-red-300">
+                        😈 مافيا: <span id="dist-mafia" class="font-bold">1</span>
+                    </div>
+                    <div class="bg-emerald-950/50 border border-emerald-800/40 p-2 rounded-lg text-emerald-300">
+                        🩺 الدكتور: <span id="dist-doctor" class="font-bold">1</span>
+                    </div>
+                    <div class="bg-indigo-950/50 border border-indigo-800/40 p-2 rounded-lg text-indigo-300">
+                        🎩 العمدة: <span id="dist-mayor" class="font-bold">1</span>
+                    </div>
+                    <div class="bg-slate-800/50 border border-slate-700 p-2 rounded-lg text-gray-300">
+                        😇 مواطن: <span id="dist-citizen" class="font-bold">1</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Host Controls -->
+            <div id="host-controls" class="hidden space-y-2">
+                <button onclick="hostStartGame()" class="w-full bg-gradient-to-r from-red-700 to-red-900 hover:from-red-600 hover:to-red-800 text-white font-black py-4 rounded-xl text-lg shadow-lg transition">
+                    <i class="fa-solid fa-play ml-2"></i> بدء اللعبة الآن
+                </button>
+            </div>
+
+            <div id="non-host-message" class="text-center text-amber-400 text-xs italic animate-pulse font-bold">
+                في انتظار رئيس الغرفة لبدء مباراة المافيا...
+            </div>
+        </div>
+
+        <!-- Role Secret Banner -->
+        <div id="my-role-banner" class="hidden mafia-card p-4 rounded-xl mb-4 flex items-center justify-between border-b-2">
+            <div class="flex items-center gap-3">
+                <div id="my-role-icon" class="text-3xl"></div>
+                <div>
+                    <div class="text-[10px] text-gray-400 font-bold">دورك السرّي في المباراة:</div>
+                    <div id="my-role-name" class="text-base font-black tracking-wide">--</div>
+                </div>
+            </div>
+            <button onclick="toggleRoleModal()" class="bg-slate-800 hover:bg-slate-700 text-xs text-amber-400 font-bold px-3 py-2 rounded-lg border border-slate-700">
+                <i class="fa-solid fa-eye ml-1"></i> شرح دوري
+            </button>
+        </div>
+
+        <!-- Night Phase -->
+        <div id="screen-phase-night" class="hidden mafia-card p-6 rounded-2xl space-y-6 text-center glow-blue">
+            <div class="inline-block bg-indigo-950/80 border border-indigo-700/50 px-4 py-1 rounded-full text-indigo-300 text-xs font-bold">
+                <i class="fa-solid fa-moon ml-1"></i> مرحلة الليل (أدوار أصحاب الصلاحيات)
+            </div>
+
+            <div id="mafia-team-box" class="hidden bg-red-950/60 border border-red-700/60 p-2.5 rounded-xl text-xs text-red-200">
+                <!-- Teammates -->
+            </div>
+
+            <div id="night-action-container" class="space-y-4">
+                <h3 id="night-instruction-title" class="text-lg font-bold text-white">--</h3>
+                <p id="night-instruction-desc" class="text-xs text-gray-400">حدد اللاعب المستهدف بقرارك السرّي:</p>
+
+                <div id="night-players-list" class="grid grid-cols-1 md:grid-cols-2 gap-2.5 pt-1">
+                    <!-- Target options -->
+                </div>
+
+                <div id="mayor-reveal-box" class="hidden bg-slate-900 border border-indigo-500/50 p-4 rounded-xl text-indigo-200 text-sm font-bold space-y-1">
+                    <!-- Mayor result -->
+                </div>
+            </div>
+
+            <div id="night-waiting-box" class="hidden space-y-3 py-6">
+                <div class="text-amber-400 text-4xl animate-bounce">
+                    <i class="fa-solid fa-bed"></i>
+                </div>
+                <p id="night-waiting-text" class="text-gray-300 text-sm font-bold">أنت تنام بسلام الآن...</p>
+                <p class="text-xs text-gray-500">في انتظار باقي اللاعبين لإتمام أدوارهم الليلية.</p>
+            </div>
+        </div>
+
+        <!-- Day Phase -->
+        <div id="screen-phase-day" class="hidden mafia-card p-6 rounded-2xl space-y-6 text-center glow-gold">
+            <div class="inline-block bg-amber-950/80 border border-amber-700/50 px-4 py-1 rounded-full text-amber-300 text-xs font-bold">
+                <i class="fa-solid fa-sun ml-1"></i> مرحلة النهار والتحقيق
+            </div>
+
+            <div id="day-news-box" class="bg-slate-900/90 border border-slate-700 p-4 rounded-xl text-sm text-gray-200 leading-relaxed shadow-inner">
+                --
+            </div>
+
+            <div class="bg-slate-900 p-3 rounded-xl border border-slate-800 space-y-2">
+                <div class="flex justify-between items-center text-xs text-gray-400 font-bold">
+                    <span>مؤقت النقاش والحوار:</span>
+                    <span id="discussion-timer-text" class="text-amber-400 font-mono text-sm">60 ثانية</span>
+                </div>
+                <div class="w-full bg-slate-950 h-2 rounded-full overflow-hidden border border-slate-800">
+                    <div id="discussion-timer-bar" class="bg-gradient-to-r from-amber-500 to-red-500 h-full w-full transition-all duration-1000"></div>
+                </div>
+            </div>
+
+            <div class="space-y-3">
+                <p class="text-xs text-gray-400">تحدثوا وتناقشوا لتحديد من تشكون فيه تمهيداً للتصويت النهائي:</p>
+                
+                <div id="host-voting-btn-container" class="hidden space-y-2">
+                    <button onclick="startDiscussionTimer()" class="w-full bg-slate-800 hover:bg-slate-700 text-amber-400 font-bold py-2.5 rounded-xl text-xs border border-slate-700 transition">
+                        <i class="fa-solid fa-stopwatch ml-1"></i> إعادة تشغيل مؤقت النقاش (60 ثانية)
+                    </button>
+                    <button onclick="hostAdvanceToVoting()" class="w-full bg-gradient-to-r from-red-700 to-red-900 hover:from-red-600 hover:to-red-800 text-white font-bold py-3.5 rounded-xl text-sm shadow-lg transition">
+                        <i class="fa-solid fa-check-to-slot ml-1"></i> بدء جلسة التصويت السري الآن
+                    </button>
+                </div>
+                <div id="non-host-voting-notice" class="text-amber-400 text-xs italic font-bold">
+                    تناقشوا سوياً، في انتظار رئيس الغرفة لبدء التصويت...
+                </div>
+            </div>
+        </div>
+
+        <!-- Voting Phase -->
+        <div id="screen-phase-voting" class="hidden mafia-card p-6 rounded-2xl space-y-6 text-center glow-red">
+            <div class="inline-block bg-red-950/80 border border-red-700/50 px-4 py-1 rounded-full text-red-300 text-xs font-bold">
+                <i class="fa-solid fa-box-archive ml-1"></i> جولة التصويت السري
+            </div>
+
+            <div id="voting-active-section" class="space-y-4">
+                <h3 class="text-base font-bold text-white">صوّت للشخص الذي تشك بأنه ينتمي للمافيا:</h3>
+                <div id="vote-targets-list" class="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+                    <!-- Candidates -->
+                </div>
+            </div>
+
+            <div id="voting-done-section" class="hidden space-y-3 py-4">
+                <div class="text-emerald-400 text-4xl">
+                    <i class="fa-solid fa-circle-check"></i>
+                </div>
+                <p class="text-white font-bold text-sm">تم تسجيل صوتك السري بنجاح!</p>
+                <p class="text-xs text-gray-400">في انتظار باقي اللاعبين لتحديد القرار النهائي...</p>
+            </div>
+        </div>
+
+        <!-- Elimination Phase -->
+        <div id="screen-phase-elimination" class="hidden mafia-card p-6 rounded-2xl space-y-6 text-center">
+            <h2 class="text-xl font-bold text-gray-200">قرار الطاولة النهائي</h2>
+
+            <div id="elimination-card" class="bg-slate-900 p-6 rounded-xl border border-red-800/60 space-y-3">
+                <!-- Details -->
+            </div>
+
+            <div id="host-next-phase-container" class="hidden">
+                <button onclick="hostAdvanceAfterElimination()" class="w-full bg-red-800 hover:bg-red-700 text-white font-bold py-3.5 rounded-xl text-sm transition">
+                    الانتقال للمرحلة التالية <i class="fa-solid fa-arrow-left mr-1"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- GameOver Phase -->
+        <div id="screen-phase-gameover" class="hidden mafia-card p-8 rounded-2xl text-center space-y-6">
+            <div id="winner-icon" class="text-7xl"></div>
+            <h2 id="winner-title" class="text-2xl md:text-3xl font-black">--</h2>
+            <p id="winner-desc" class="text-gray-300 text-xs md:text-sm">--</p>
+
+            <div id="final-roles-summary" class="bg-slate-900/90 p-4 rounded-xl border border-slate-800 text-right space-y-2 text-xs max-h-[220px] overflow-y-auto custom-scrollbar">
+                <!-- Summary -->
+            </div>
+
+            <button id="btn-restart-game" onclick="resetToLobby()" class="hidden w-full bg-amber-600 hover:bg-amber-500 text-slate-950 font-black py-4 rounded-xl text-base transition shadow-lg">
+                <i class="fa-solid fa-rotate-right ml-2"></i> العودة لغرفة الانتظار وبدء مباراة جديدة
+            </button>
+        </div>
+
+        <!-- Game Event Logs -->
+        <div id="game-log-box" class="hidden mt-4 bg-slate-950/80 border border-slate-800 rounded-xl p-3 text-xs space-y-1 max-h-24 overflow-y-auto custom-scrollbar">
+            <div class="font-bold text-gray-400 text-[10px] mb-1 flex justify-between">
+                <span>سجل أحداث المباراة:</span>
+                <i class="fa-solid fa-list-ul"></i>
+            </div>
+            <div id="game-log-content" class="space-y-1 text-gray-300 font-mono text-[11px]">
+                <!-- Log entries -->
+            </div>
+        </div>
+
+    </main>
+
+    <!-- ROLE DETAIL MODAL -->
+    <div id="role-modal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-amber-600/50 p-6 rounded-2xl max-w-sm w-full text-center space-y-4 shadow-2xl">
+            <div id="modal-role-icon" class="text-5xl"></div>
+            <h3 id="modal-role-title" class="text-2xl font-black">--</h3>
+            <p id="modal-role-desc" class="text-gray-300 text-xs leading-relaxed">--</p>
+            <button onclick="toggleRoleModal()" class="w-full bg-slate-800 hover:bg-slate-700 text-white font-bold py-2.5 rounded-xl text-xs border border-slate-700">
+                إغلاق
+            </button>
+        </div>
+    </div>
+
+    <!-- GENERAL ALERT MODAL -->
+    <div id="custom-modal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-red-600/50 p-6 rounded-2xl max-w-sm w-full text-center space-y-4 shadow-2xl">
+            <div class="text-amber-500 text-4xl">
+                <i class="fa-solid fa-triangle-exclamation"></i>
+            </div>
+            <p id="modal-alert-text" class="text-white font-medium text-xs md:text-sm">تنبيه</p>
+            <button onclick="closeAlertModal()" class="w-full bg-red-700 hover:bg-red-600 text-white font-bold py-2.5 rounded-xl text-xs">
+                موافق
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // --- Web Audio Synthesizer ---
+        function playSound(type) {
+            try {
+                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+
+                if (type === 'vote') {
+                    osc.frequency.setValueAtTime(440, ctx.currentTime);
+                    osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.15);
+                    gain.gain.setValueAtTime(0.2, ctx.currentTime);
+                    gain.gain.linearRampToValueAtTime(0.01, ctx.currentTime + 0.15);
+                    osc.start();
+                    osc.stop(ctx.currentTime + 0.15);
+                } else if (type === 'night') {
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(300, ctx.currentTime);
+                    osc.frequency.exponentialRampToValueAtTime(150, ctx.currentTime + 0.5);
+                    gain.gain.setValueAtTime(0.3, ctx.currentTime);
+                    gain.gain.linearRampToValueAtTime(0.01, ctx.currentTime + 0.5);
+                    osc.start();
+                    osc.stop(ctx.currentTime + 0.5);
+                } else if (type === 'gavel') {
+                    osc.type = 'square';
+                    osc.frequency.setValueAtTime(180, ctx.currentTime);
+                    gain.gain.setValueAtTime(0.4, ctx.currentTime);
+                    gain.gain.linearRampToValueAtTime(0.01, ctx.currentTime + 0.2);
+                    osc.start();
+                    osc.stop(ctx.currentTime + 0.2);
+                } else if (type === 'win') {
+                    osc.frequency.setValueAtTime(523.25, ctx.currentTime);
+                    osc.frequency.setValueAtTime(659.25, ctx.currentTime + 0.15);
+                    osc.frequency.setValueAtTime(783.99, ctx.currentTime + 0.3);
+                    gain.gain.setValueAtTime(0.3, ctx.currentTime);
+                    gain.gain.linearRampToValueAtTime(0.01, ctx.currentTime + 0.5);
+                    osc.start();
+                    osc.stop(ctx.currentTime + 0.5);
+                }
+            } catch (e) {}
+        }
+
+        // --- Core Application State ---
+        let myPlayerId = 'p_' + Math.random().toString(36).substring(2, 9);
+        let selectedAvatar = '🕵️‍♂️';
+        let isHost = false;
+        let roomCode = null;
+        let mqttClient = null;
+        let localChannel = null;
+        let discussionInterval = null;
+
+        const AVATARS = ['🕵️‍♂️', '🕶️', '🐺', '🧙‍♂️', '👑', '🎭', '🧛‍♂️', '🎃', '🤠', '⚔️'];
+
+        const ROLES = {
+            CITIZEN: 'مواطن عادي 😇',
+            MAFIA: 'مافيا 😈',
+            MAYOR: 'العمدة 🎩',
+            DOCTOR: 'الدكتور 🩺'
+        };
+
+        // Authoritative Game State
+        let gameState = {
+            code: '',
+            hostId: '',
+            status: 'LOBBY',
+            players: {},
+            nightActions: { mafiaTarget: null, doctorTarget: null, mayorTarget: null },
+            logs: [],
+            lastEliminated: null,
+            lastNightKilled: null,
+            winner: null
+        };
+
+        function setupNetworkEngine(code) {
+            roomCode = code;
+            
+            // 1. Setup Local Multi-Tab BroadcastChannel
+            try {
+                if (localChannel) localChannel.close();
+                localChannel = new BroadcastChannel(`mafia_room_${roomCode}`);
+                localChannel.onmessage = (event) => {
+                    handleIncomingNetworkPacket(event.data);
+                };
+            } catch (e) {
+                console.warn("BroadcastChannel not supported", e);
+            }
+
+            // 2. Setup Serverless MQTT Client for GitHub Pages & Cross-Device Online Play
+            try {
+                if (mqttClient) {
+                    try { mqttClient.end(); } catch (err) {}
+                }
+
+                // Connect to fast public MQTT WebSocket broker
+                mqttClient = mqtt.connect('wss://broker.emqx.io:8084/mqtt', {
+                    clientId: 'mafia_' + myPlayerId,
+                    keepalive: 30,
+                    clean: true,
+                    reconnectPeriod: 2000,
+                    connectTimeout: 8000
+                });
+
+                mqttClient.on('connect', () => {
+                    updateStatusBadge(true, "أونلاين (شبكة سريعة)");
+                    // Subscribe to state and action channels for this room code
+                    mqttClient.subscribe(`mafia/room/${roomCode}/state`);
+                    mqttClient.subscribe(`mafia/room/${roomCode}/actions`);
+                });
+
+                mqttClient.on('message', (topic, message) => {
+                    try {
+                        const packet = JSON.parse(message.toString());
+                        handleIncomingNetworkPacket(packet);
+                    } catch (e) {}
+                });
+
+                mqttClient.on('error', (err) => {
+                    console.warn("MQTT connection error, falling back to local mode", err);
+                    updateStatusBadge(false, "وضع التمرير المحلي");
+                });
+
+                mqttClient.on('offline', () => {
+                    updateStatusBadge(false, "وضع التمرير المحلي");
+                });
+            } catch (err) {
+                console.warn("WebSockets restricted, running in local fallback", err);
+                updateStatusBadge(false, "وضع التمرير المحلي");
+            }
+        }
+
+        function updateStatusBadge(online, text) {
+            const badge = document.getElementById('p2p-status-badge');
+            const dot = document.getElementById('p2p-status-dot');
+            const label = document.getElementById('p2p-status-text');
+
+            label.innerText = text;
+            if (online) {
+                badge.className = "bg-emerald-950/80 border border-emerald-700/60 text-emerald-400 px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5";
+                dot.className = "w-2 h-2 rounded-full bg-emerald-400 animate-pulse";
+            } else {
+                badge.className = "bg-amber-950/80 border border-amber-700/60 text-amber-400 px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5";
+                dot.className = "w-2 h-2 rounded-full bg-amber-400";
+            }
+        }
+
+        function sendNetworkPacket(topicSuffix, packet) {
+            packet.senderId = myPlayerId;
+            const topic = `mafia/room/${roomCode}/${topicSuffix}`;
+
+            // Broadcast to MQTT
+            if (mqttClient && mqttClient.connected) {
+                try {
+                    mqttClient.publish(topic, JSON.stringify(packet));
+                } catch (e) {}
+            }
+
+            // Broadcast to local BroadcastChannel (same browser tabs/preview)
+            if (localChannel) {
+                try {
+                    localChannel.postMessage(packet);
+                } catch (e) {}
+            }
+        }
+
+        function handleIncomingNetworkPacket(packet) {
+            if (!packet || packet.senderId === myPlayerId && packet.type !== 'STATE_UPDATE') {
+                if (packet.senderId === myPlayerId && packet.type === 'ACTION_NIGHT_CHOICE') {
+                    // Handled locally
+                } else if (packet.senderId === myPlayerId && packet.type === 'ACTION_VOTE') {
+                    // Handled locally
+                } else {
+                    return;
+                }
+            }
+
+            if (packet.type === 'STATE_UPDATE') {
+                gameState = packet.state;
+                renderGameState();
+            } else if (isHost) {
+                // Host processes client incoming actions
+                if (packet.type === 'JOIN_REQUEST') {
+                    if (gameState.status !== 'LOBBY') return;
+                    const p = packet.player;
+                    gameState.players[p.id] = {
+                        id: p.id,
+                        name: p.name,
+                        avatar: p.avatar,
+                        role: null,
+                        alive: true,
+                        nightChoice: null,
+                        voteTarget: null
+                    };
+                    addGameLog(`انضم اللاعب ${p.name} للغرفة.`);
+                    broadcastState();
+                } else if (packet.type === 'ACTION_NIGHT_CHOICE') {
+                    if (gameState.players[packet.playerId]) {
+                        gameState.players[packet.playerId].nightChoice = packet.targetId;
+                        if (gameState.players[packet.playerId].role === ROLES.MAFIA) {
+                            gameState.nightActions.mafiaTarget = packet.targetId;
+                        } else if (gameState.players[packet.playerId].role === ROLES.DOCTOR) {
+                            gameState.nightActions.doctorTarget = packet.targetId;
+                        }
+                    }
+                    checkHostAutoPhaseTransitions();
+                    broadcastState();
+                } else if (packet.type === 'ACTION_VOTE') {
+                    if (gameState.players[packet.playerId]) {
+                        gameState.players[packet.playerId].voteTarget = packet.targetId;
+                    }
+                    checkHostAutoPhaseTransitions();
+                    broadcastState();
+                }
+            }
+        }
+
+        renderAvatarSelector();
+
+        function renderAvatarSelector() {
+            const container = document.getElementById('avatar-selector');
+            container.innerHTML = AVATARS.map(av => `
+                <button onclick="selectAvatar('${av}')" class="avatar-btn border-2 ${av === selectedAvatar ? 'border-amber-400 bg-amber-950/40' : 'border-slate-800 bg-slate-900'} text-xl p-2 rounded-xl transition hover:scale-105">
+                    ${av}
+                </button>
+            `).join('');
+        }
+
+        window.selectAvatar = function(av) {
+            selectedAvatar = av;
+            renderAvatarSelector();
+        };
+
+        window.createRoom = function() {
+            const nameInput = document.getElementById('input-player-name').value.trim();
+            if (!nameInput) {
+                showAlertModal("يرجى كتابة اسمك أولاً!");
+                return;
+            }
+
+            isHost = true;
+            roomCode = Math.floor(100000 + Math.random() * 900000).toString();
+
+            gameState = {
+                code: roomCode,
+                hostId: myPlayerId,
+                status: 'LOBBY',
+                players: {
+                    [myPlayerId]: {
+                        id: myPlayerId,
+                        name: nameInput,
+                        avatar: selectedAvatar,
+                        role: null,
+                        alive: true,
+                        nightChoice: null,
+                        voteTarget: null
+                    }
+                },
+                nightActions: { mafiaTarget: null, doctorTarget: null, mayorTarget: null },
+                logs: [`تم إنشاء الغرفة ${roomCode} بواسطة ${nameInput}`],
+                lastEliminated: null,
+                lastNightKilled: null,
+                winner: null
+            };
+
+            setupNetworkEngine(roomCode);
+            renderGameState();
+        };
+
+        window.joinRoom = function() {
+            const nameInput = document.getElementById('input-player-name').value.trim();
+            const codeInput = document.getElementById('input-room-code').value.trim().toUpperCase();
+
+            if (!nameInput) {
+                showAlertModal("يرجى كتابة اسمك أولاً!");
+                return;
+            }
+            if (!codeInput || codeInput.length !== 6) {
+                showAlertModal("يرجى إدخال رمز غرفة مكون من 6 أرقام!");
+                return;
+            }
+
+            isHost = false;
+            roomCode = codeInput;
+
+            setupNetworkEngine(roomCode);
+
+            // Send join request to host
+            setTimeout(() => {
+                sendNetworkPacket('actions', {
+                    type: 'JOIN_REQUEST',
+                    player: {
+                        id: myPlayerId,
+                        name: nameInput,
+                        avatar: selectedAvatar
+                    }
+                });
+            }, 500);
+        };
+
+        function broadcastState() {
+            renderGameState();
+            if (!isHost) return;
+            sendNetworkPacket('state', {
+                type: 'STATE_UPDATE',
+                state: gameState
+            });
+        }
+
+        function addGameLog(msg) {
+            gameState.logs.push(msg);
+            if (gameState.logs.length > 10) gameState.logs.shift();
+        }
+
+        function renderGameState() {
+            if (!gameState || !gameState.code) return;
+
+            document.getElementById('room-badge').classList.remove('hidden');
+            document.getElementById('btn-leave-room').classList.remove('hidden');
+            document.getElementById('header-room-code').innerText = gameState.code;
+            document.getElementById('screen-landing').classList.add('hidden');
+
+            const myPlayer = gameState.players[myPlayerId];
+
+            if (myPlayer && myPlayer.role) {
+                document.getElementById('my-role-banner').classList.remove('hidden');
+                document.getElementById('my-role-name').innerText = myPlayer.role;
+                
+                let iconHtml = `<i class="fa-solid fa-user text-gray-400"></i>`;
+                if (myPlayer.role === ROLES.MAFIA) iconHtml = `<i class="fa-solid fa-user-ninja text-red-500"></i>`;
+                if (myPlayer.role === ROLES.DOCTOR) iconHtml = `<i class="fa-solid fa-user-doctor text-emerald-400"></i>`;
+                if (myPlayer.role === ROLES.MAYOR) iconHtml = `<i class="fa-solid fa-user-tie text-indigo-400"></i>`;
+                if (myPlayer.role === ROLES.CITIZEN) iconHtml = `<i class="fa-solid fa-user-shield text-slate-300"></i>`;
+                
+                document.getElementById('my-role-icon').innerHTML = iconHtml;
+            } else {
+                document.getElementById('my-role-banner').classList.add('hidden');
+            }
+
+            renderLogs();
+            hideAllPhaseScreens();
+
+            switch (gameState.status) {
+                case 'LOBBY':
+                    renderLobby();
+                    break;
+                case 'NIGHT':
+                    renderNightPhase(myPlayer);
+                    break;
+                case 'DAY':
+                    renderDayPhase();
+                    break;
+                case 'VOTING':
+                    renderVotingPhase(myPlayer);
+                    break;
+                case 'ELIMINATION':
+                    renderEliminationPhase();
+                    break;
+                case 'GAMEOVER':
+                    renderGameOverPhase();
+                    break;
+            }
+        }
+
+        function hideAllPhaseScreens() {
+            const screens = ['screen-lobby', 'screen-phase-night', 'screen-phase-day', 'screen-phase-voting', 'screen-phase-elimination', 'screen-phase-gameover'];
+            screens.forEach(id => document.getElementById(id).classList.add('hidden'));
+        }
+
+        function renderLogs() {
+            if (!gameState || !gameState.logs || gameState.status === 'LOBBY') {
+                document.getElementById('game-log-box').classList.add('hidden');
+                return;
+            }
+            document.getElementById('game-log-box').classList.remove('hidden');
+            const logContent = document.getElementById('game-log-content');
+            logContent.innerHTML = gameState.logs.slice(-5).map(l => `<div>• ${escapeHtml(l)}</div>`).join('');
+            logContent.parentElement.scrollTop = logContent.parentElement.scrollHeight;
+        }
+
+        function renderLobby() {
+            document.getElementById('screen-lobby').classList.remove('hidden');
+            document.getElementById('lobby-code-display').innerText = gameState.code;
+
+            const playersList = Object.values(gameState.players);
+            document.getElementById('lobby-player-count').innerText = `${playersList.length}/14`;
+
+            const container = document.getElementById('lobby-players-container');
+            container.innerHTML = playersList.map(p => `
+                <div class="bg-slate-900 border border-slate-800 p-2 rounded-xl flex items-center justify-between text-xs">
+                    <span class="font-bold text-gray-200 truncate flex items-center gap-1.5">
+                        <span class="text-base">${p.avatar || '👤'}</span> 
+                        ${escapeHtml(p.name)}
+                    </span>
+                    ${p.id === gameState.hostId ? '<span class="bg-amber-950/80 border border-amber-700/60 text-amber-400 text-[10px] px-2 py-0.5 rounded font-bold">المضيف</span>' : ''}
+                </div>
+            `).join('');
+
+            const count = playersList.length;
+            let mafia = 1;
+            let doctor = count >= 4 ? 1 : 0;
+            let mayor = count >= 5 ? 1 : 0;
+            if (count >= 8) mafia = 2;
+            if (count >= 12) mafia = 3;
+            let citizens = Math.max(0, count - (mafia + doctor + mayor));
+
+            document.getElementById('dist-mafia').innerText = mafia;
+            document.getElementById('dist-doctor').innerText = doctor;
+            document.getElementById('dist-mayor').innerText = mayor;
+            document.getElementById('dist-citizen').innerText = citizens;
+
+            if (isHost) {
+                document.getElementById('host-controls').classList.remove('hidden');
+                document.getElementById('non-host-message').classList.add('hidden');
+            } else {
+                document.getElementById('host-controls').classList.add('hidden');
+                document.getElementById('non-host-message').classList.remove('hidden');
+            }
+        }
+
+        window.hostStartGame = function() {
+            if (!isHost) return;
+            const playersList = Object.values(gameState.players);
+            if (playersList.length < 4) {
+                showAlertModal("الحد الأدنى لبدء اللعبة هو 4 لاعبين!");
+                return;
+            }
+
+            const count = playersList.length;
+            let mafiaCount = parseInt(document.getElementById('dist-mafia').innerText);
+            let doctorCount = parseInt(document.getElementById('dist-doctor').innerText);
+            let mayorCount = parseInt(document.getElementById('dist-mayor').innerText);
+
+            let rolePool = [];
+            for (let i = 0; i < mafiaCount; i++) rolePool.push(ROLES.MAFIA);
+            for (let i = 0; i < doctorCount; i++) rolePool.push(ROLES.DOCTOR);
+            for (let i = 0; i < mayorCount; i++) rolePool.push(ROLES.MAYOR);
+            while (rolePool.length < count) rolePool.push(ROLES.CITIZEN);
+
+            rolePool.sort(() => Math.random() - 0.5);
+
+            playersList.forEach((p, idx) => {
+                gameState.players[p.id].role = rolePool[idx];
+                gameState.players[p.id].alive = true;
+                gameState.players[p.id].nightChoice = null;
+                gameState.players[p.id].voteTarget = null;
+            });
+
+            playSound('night');
+
+            gameState.status = 'NIGHT';
+            gameState.nightActions = { mafiaTarget: null, doctorTarget: null, mayorTarget: null };
+            addGameLog("بدأت المباراة! أسدل الليل أستاره على المدينة.");
+
+            broadcastState();
+        };
+
+        function renderNightPhase(myPlayer) {
+            document.getElementById('screen-phase-night').classList.remove('hidden');
+
+            const actionContainer = document.getElementById('night-action-container');
+            const waitingBox = document.getElementById('night-waiting-box');
+            const mafiaTeamBox = document.getElementById('mafia-team-box');
+            const alivePlayers = Object.values(gameState.players).filter(p => p.alive);
+
+            if (myPlayer && myPlayer.role === ROLES.MAFIA) {
+                const mafiaTeammates = alivePlayers.filter(p => p.role === ROLES.MAFIA);
+                if (mafiaTeammates.length > 1) {
+                    mafiaTeamBox.classList.remove('hidden');
+                    mafiaTeamBox.innerHTML = `<strong>أعضاء المافيا في فريقك:</strong> ${mafiaTeammates.map(m => escapeHtml(m.name)).join('، ')}`;
+                } else {
+                    mafiaTeamBox.classList.add('hidden');
+                }
+            } else {
+                mafiaTeamBox.classList.add('hidden');
+            }
+
+            if (!myPlayer || !myPlayer.alive) {
+                actionContainer.classList.add('hidden');
+                waitingBox.classList.remove('hidden');
+                document.getElementById('night-waiting-text').innerText = "أنت ميت الآن... تتابع مجريات اللعبة كطيف مرئية لك الأحداث.";
+                return;
+            }
+
+            const hasActed = myPlayer.nightChoice !== null;
+
+            if (myPlayer.role === ROLES.CITIZEN || hasActed) {
+                actionContainer.classList.add('hidden');
+                waitingBox.classList.remove('hidden');
+                document.getElementById('night-waiting-text').innerText = hasActed ? "تم إرسال قرارك بنجاح! تنام بسلام الآن..." : "أنت مواطن عادي، لا تملك دوراً ليلياً وتنام بسلام...";
+            } else {
+                actionContainer.classList.remove('hidden');
+                waitingBox.classList.add('hidden');
+
+                const title = document.getElementById('night-instruction-title');
+                const desc = document.getElementById('night-instruction-desc');
+                const list = document.getElementById('night-players-list');
+                const mayorBox = document.getElementById('mayor-reveal-box');
+
+                list.innerHTML = '';
+                mayorBox.classList.add('hidden');
+
+                if (myPlayer.role === ROLES.MAFIA) {
+                    title.innerText = "اختر الضحية لتصفيتها 😈";
+                    desc.innerText = "حدد اللاعب المراد قتله الليلة بالسر:";
+                    
+                    alivePlayers.forEach(p => {
+                        list.innerHTML += `
+                            <button onclick="submitNightChoice('${p.id}')" class="bg-slate-900 hover:bg-red-950/80 border border-slate-800 hover:border-red-600 text-white p-3 rounded-xl text-xs font-bold flex items-center justify-between transition">
+                                <span class="flex items-center gap-1.5"><span>${p.avatar || '👤'}</span> ${escapeHtml(p.name)}</span>
+                                <i class="fa-solid fa-skull text-red-500"></i>
+                            </button>
+                        `;
+                    });
+                } else if (myPlayer.role === ROLES.DOCTOR) {
+                    title.innerText = "اختر من تعالجه وتحميه 🩺";
+                    desc.innerText = "حدد لاعباً لإنقاذه، ولو اختارته المافيا سيعيش وينجو:";
+
+                    alivePlayers.forEach(p => {
+                        list.innerHTML += `
+                            <button onclick="submitNightChoice('${p.id}')" class="bg-slate-900 hover:bg-emerald-950/80 border border-slate-800 hover:border-emerald-600 text-white p-3 rounded-xl text-xs font-bold flex items-center justify-between transition">
+                                <span class="flex items-center gap-1.5"><span>${p.avatar || '👤'}</span> ${escapeHtml(p.name)}</span>
+                                <i class="fa-solid fa-kit-medical text-emerald-400"></i>
+                            </button>
+                        `;
+                    });
+                } else if (myPlayer.role === ROLES.MAYOR) {
+                    title.innerText = "فحص هويّة لاعب 🎩";
+                    desc.innerText = "اختر لاعباً ليسألك العمدة عن حقيقته (هل هو صالح أم مافيا):";
+
+                    alivePlayers.forEach(p => {
+                        list.innerHTML += `
+                            <button onclick="submitMayorSearch('${p.id}')" class="bg-slate-900 hover:bg-indigo-950/80 border border-slate-800 hover:border-indigo-600 text-white p-3 rounded-xl text-xs font-bold flex items-center justify-between transition">
+                                <span class="flex items-center gap-1.5"><span>${p.avatar || '👤'}</span> ${escapeHtml(p.name)}</span>
+                                <i class="fa-solid fa-user-check text-indigo-400"></i>
+                            </button>
+                        `;
+                    });
+                }
+            }
+        }
+
+        window.submitNightChoice = function(targetId) {
+            playSound('vote');
+            if (isHost) {
+                gameState.players[myPlayerId].nightChoice = targetId;
+                const myRole = gameState.players[myPlayerId].role;
+                if (myRole === ROLES.MAFIA) gameState.nightActions.mafiaTarget = targetId;
+                if (myRole === ROLES.DOCTOR) gameState.nightActions.doctorTarget = targetId;
+                checkHostAutoPhaseTransitions();
+                broadcastState();
+            } else {
+                gameState.players[myPlayerId].nightChoice = targetId;
+                renderGameState();
+                sendNetworkPacket('actions', {
+                    type: 'ACTION_NIGHT_CHOICE',
+                    playerId: myPlayerId,
+                    targetId: targetId
+                });
+            }
+        };
+
+        window.submitMayorSearch = function(targetId) {
+            playSound('vote');
+            const target = gameState.players[targetId];
+            const isMafia = target.role === ROLES.MAFIA;
+
+            const mayorBox = document.getElementById('mayor-reveal-box');
+            mayorBox.innerHTML = `
+                <div>سؤال العمدة عن اللاعب: <span class="text-white underline">${escapeHtml(target.name)}</span></div>
+                <div class="text-base font-black pt-1 ${isMafia ? 'text-red-500' : 'text-emerald-400'}">
+                    ${isMafia ? 'عنصر مافيا 😈 (غير صالح)' : 'شخص صالح 😇 (مواطن أو طبيب)'}
+                </div>
+            `;
+            mayorBox.classList.remove('hidden');
+
+            submitNightChoice(targetId);
+        };
+
+        function checkHostAutoPhaseTransitions() {
+            if (!isHost) return;
+
+            const alivePlayers = Object.values(gameState.players).filter(p => p.alive);
+
+            if (gameState.status === 'NIGHT') {
+                const aliveMafia = alivePlayers.filter(p => p.role === ROLES.MAFIA);
+                const aliveDoctor = alivePlayers.filter(p => p.role === ROLES.DOCTOR);
+                const aliveMayor = alivePlayers.filter(p => p.role === ROLES.MAYOR);
+
+                const mafiaDone = aliveMafia.length === 0 || aliveMafia.some(p => p.nightChoice !== null);
+                const doctorDone = aliveDoctor.length === 0 || aliveDoctor.every(p => p.nightChoice !== null);
+                const mayorDone = aliveMayor.length === 0 || aliveMayor.every(p => p.nightChoice !== null);
+
+                if (mafiaDone && doctorDone && mayorDone) {
+                    resolveNightPhase();
+                }
+            } else if (gameState.status === 'VOTING') {
+                const allAliveVoted = alivePlayers.every(p => p.voteTarget !== null);
+                if (allAliveVoted) {
+                    resolveVotingPhase();
+                }
+            }
+        }
+
+        function resolveNightPhase() {
+            const actions = gameState.nightActions;
+            let killedPlayer = null;
+
+            if (actions.mafiaTarget && actions.mafiaTarget !== actions.doctorTarget) {
+                killedPlayer = gameState.players[actions.mafiaTarget];
+            }
+
+            Object.keys(gameState.players).forEach(id => {
+                gameState.players[id].nightChoice = null;
+            });
+
+            if (killedPlayer) {
+                gameState.players[killedPlayer.id].alive = false;
+                addGameLog(`قُتل اللاعب ${killedPlayer.name} خلال الليل.`);
+            } else {
+                addGameLog(`نجح الدكتور في علاج الضحية أو مرت الليلة بسلام!`);
+            }
+
+            const winStatus = checkWinCondition();
+
+            if (winStatus) {
+                gameState.status = 'GAMEOVER';
+                gameState.winner = winStatus;
+            } else {
+                gameState.status = 'DAY';
+                gameState.lastNightKilled = killedPlayer ? killedPlayer.name : null;
+            }
+
+            broadcastState();
+        }
+
+        function renderDayPhase() {
+            document.getElementById('screen-phase-day').classList.remove('hidden');
+
+            const newsBox = document.getElementById('day-news-box');
+            if (gameState.lastNightKilled) {
+                newsBox.innerHTML = `
+                    <div class="text-red-400 font-bold text-sm mb-1"><i class="fa-solid fa-skull-crossbones ml-1"></i> خبر عاجل عند الشروق:</div>
+                    للأسف، عُثر على اللاعب <span class="text-white font-black underline">${escapeHtml(gameState.lastNightKilled)}</span> مقتولاً هذا الصباح!
+                `;
+            } else {
+                newsBox.innerHTML = `
+                    <div class="text-emerald-400 font-bold text-sm mb-1"><i class="fa-solid fa-shield-heart ml-1"></i> خبر سار عند الشروق:</div>
+                    نجحت العناية والمصادفة في إنجاء البلدة! لم يمت أي شخص في هذه الليلة.
+                `;
+            }
+
+            startDiscussionTimer();
+
+            if (isHost) {
+                document.getElementById('host-voting-btn-container').classList.remove('hidden');
+                document.getElementById('non-host-voting-notice').classList.add('hidden');
+            } else {
+                document.getElementById('host-voting-btn-container').classList.add('hidden');
+                document.getElementById('non-host-voting-notice').classList.remove('hidden');
+            }
+        }
+
+        window.startDiscussionTimer = function() {
+            if (discussionInterval) clearInterval(discussionInterval);
+            let timeLeft = 60;
+            const textElem = document.getElementById('discussion-timer-text');
+            const barElem = document.getElementById('discussion-timer-bar');
+
+            barElem.style.width = '100%';
+            textElem.innerText = `${timeLeft} ثانية`;
+
+            discussionInterval = setInterval(() => {
+                timeLeft--;
+                if (timeLeft <= 0) {
+                    clearInterval(discussionInterval);
+                    textElem.innerText = "انتهى الوقت!";
+                    barElem.style.width = '0%';
+                } else {
+                    textElem.innerText = `${timeLeft} ثانية`;
+                    barElem.style.width = `${(timeLeft / 60) * 100}%`;
+                }
+            }, 1000);
+        };
+
+        window.hostAdvanceToVoting = function() {
+            if (!isHost) return;
+            if (discussionInterval) clearInterval(discussionInterval);
+            playSound('gavel');
+
+            Object.keys(gameState.players).forEach(id => {
+                gameState.players[id].voteTarget = null;
+            });
+
+            gameState.status = 'VOTING';
+            addGameLog("بدأت جولة التصويت السري للطاولة.");
+            broadcastState();
+        };
+
+        function renderVotingPhase(myPlayer) {
+            document.getElementById('screen-phase-voting').classList.remove('hidden');
+
+            const activeSection = document.getElementById('voting-active-section');
+            const doneSection = document.getElementById('voting-done-section');
+            const list = document.getElementById('vote-targets-list');
+
+            if (!myPlayer || !myPlayer.alive) {
+                activeSection.classList.add('hidden');
+                doneSection.classList.remove('hidden');
+                doneSection.querySelector('p').innerText = "أنت طيف ميت، لا تملك حق التصويت.";
+                return;
+            }
+
+            if (myPlayer.voteTarget !== null) {
+                activeSection.classList.add('hidden');
+                doneSection.classList.remove('hidden');
+            } else {
+                activeSection.classList.remove('hidden');
+                doneSection.classList.add('hidden');
+
+                const candidates = Object.values(gameState.players).filter(p => p.alive && p.id !== myPlayerId);
+                list.innerHTML = candidates.map(p => `
+                    <button onclick="submitVote('${p.id}')" class="bg-slate-900 hover:bg-red-950/80 border border-slate-800 hover:border-red-600 text-white p-3.5 rounded-xl text-xs font-bold flex items-center justify-between transition">
+                        <span class="flex items-center gap-1.5"><span>${p.avatar || '👤'}</span> ${escapeHtml(p.name)}</span>
+                        <i class="fa-solid fa-check-to-slot text-red-500"></i>
+                    </button>
+                `).join('');
+            }
+        }
+
+        window.submitVote = function(targetId) {
+            playSound('vote');
+            if (isHost) {
+                gameState.players[myPlayerId].voteTarget = targetId;
+                checkHostAutoPhaseTransitions();
+                broadcastState();
+            } else {
+                gameState.players[myPlayerId].voteTarget = targetId;
+                renderGameState();
+                sendNetworkPacket('actions', {
+                    type: 'ACTION_VOTE',
+                    playerId: myPlayerId,
+                    targetId: targetId
+                });
+            }
+        };
+
+        function resolveVotingPhase() {
+            const votes = {};
+            const alivePlayers = Object.values(gameState.players).filter(p => p.alive && p.voteTarget);
+
+            alivePlayers.forEach(p => {
+                votes[p.voteTarget] = (votes[p.voteTarget] || 0) + 1;
+            });
+
+            let maxVotes = 0;
+            let eliminatedId = null;
+            let isTie = false;
+
+            for (const [id, count] of Object.entries(votes)) {
+                if (count > maxVotes) {
+                    maxVotes = count;
+                    eliminatedId = id;
+                    isTie = false;
+                } else if (count === maxVotes) {
+                    isTie = true;
+                }
+            }
+
+            let eliminatedPlayer = null;
+
+            if (!isTie && eliminatedId) {
+                eliminatedPlayer = gameState.players[eliminatedId];
+                gameState.players[eliminatedId].alive = false;
+                addGameLog(`استبعدت الطاولة اللاعب ${eliminatedPlayer.name} بالتصويت.`);
+            } else {
+                addGameLog(`انتهى التصويت بالتعادل ولم يُستبعد أحد.`);
+            }
+
+            Object.keys(gameState.players).forEach(id => {
+                gameState.players[id].voteTarget = null;
+            });
+
+            gameState.lastEliminated = eliminatedPlayer ? { name: eliminatedPlayer.name, role: eliminatedPlayer.role } : null;
+
+            const winStatus = checkWinCondition();
+
+            if (winStatus) {
+                gameState.status = 'GAMEOVER';
+                gameState.winner = winStatus;
+            } else {
+                gameState.status = 'ELIMINATION';
+            }
+
+            broadcastState();
+        }
+
+        function checkWinCondition() {
+            const aliveMafia = Object.values(gameState.players).filter(p => p.alive && p.role === ROLES.MAFIA);
+            const aliveCitizens = Object.values(gameState.players).filter(p => p.alive && p.role !== ROLES.MAFIA);
+
+            if (aliveMafia.length === 0) return 'CITIZENS';
+            if (aliveMafia.length >= aliveCitizens.length) return 'MAFIA';
+            return null;
+        }
+
+        function renderEliminationPhase() {
+            document.getElementById('screen-phase-elimination').classList.remove('hidden');
+
+            const card = document.getElementById('elimination-card');
+            if (gameState.lastEliminated) {
+                card.innerHTML = `
+                    <div class="text-red-500 font-black text-base mb-1"><i class="fa-solid fa-gavel ml-1"></i> قررت الطاولة استبعاد:</div>
+                    <div class="text-2xl font-black text-white py-1">${escapeHtml(gameState.lastEliminated.name)}</div>
+                    <div class="text-xs text-gray-400 mt-2">
+                        وكان دوره السرّي: <span class="text-amber-400 font-bold">${gameState.lastEliminated.role}</span>
+                    </div>
+                `;
+            } else {
+                card.innerHTML = `
+                    <div class="text-amber-400 font-bold text-base"><i class="fa-solid fa-scale-unbalanced ml-1"></i> تعادل الأصوات!</div>
+                    <p class="text-gray-300 text-xs mt-1">لم تتوافر الأغلبية لاستبعاد أي لاعب في هذه الجولة.</p>
+                `;
+            }
+
+            if (isHost) {
+                document.getElementById('host-next-phase-container').classList.remove('hidden');
+            } else {
+                document.getElementById('host-next-phase-container').classList.add('hidden');
+            }
+        }
+
+        window.hostAdvanceAfterElimination = function() {
+            if (!isHost) return;
+            playSound('night');
+            gameState.status = 'NIGHT';
+            gameState.nightActions = { mafiaTarget: null, doctorTarget: null, mayorTarget: null };
+            addGameLog("حل الليل مجدداً على المدينة.");
+            broadcastState();
+        };
+
+        function renderGameOverPhase() {
+            document.getElementById('screen-phase-gameover').classList.remove('hidden');
+            playSound('win');
+
+            const icon = document.getElementById('winner-icon');
+            const title = document.getElementById('winner-title');
+            const desc = document.getElementById('winner-desc');
+            const summary = document.getElementById('final-roles-summary');
+
+            if (gameState.winner === 'CITIZENS') {
+                icon.innerHTML = `<i class="fa-solid fa-trophy text-amber-400"></i>`;
+                title.innerText = "فاز المواطنون الشرفاء! 🏆";
+                title.className = "text-2xl md:text-3xl font-black text-amber-400";
+                desc.innerText = "نجح المواطنون والعمدة والدكتور في القضاء على جميع عناصر المافيا!";
+            } else {
+                icon.innerHTML = `<i class="fa-solid fa-skull text-red-600"></i>`;
+                title.innerText = "سيطرت المافيا بالكامل! 😈";
+                title.className = "text-2xl md:text-3xl font-black text-red-500";
+                desc.innerText = "تفوقت المافيا وقضت على الأغلبية في المدينة!";
+            }
+
+            const playersList = Object.values(gameState.players);
+            summary.innerHTML = `<div class="font-bold text-gray-400 mb-2 border-b border-slate-700 pb-1">كشف هويات جميع اللاعبين:</div>` +
+                playersList.map(p => `
+                    <div class="flex justify-between items-center py-1">
+                        <span class="${p.alive ? 'text-white font-bold' : 'text-gray-500 line-through'} flex items-center gap-1">
+                            <span>${p.avatar || '👤'}</span> ${escapeHtml(p.name)}
+                        </span>
+                        <span class="font-bold ${p.role === ROLES.MAFIA ? 'text-red-400' : 'text-emerald-400'}">${p.role}</span>
+                    </div>
+                `).join('');
+
+            if (isHost) {
+                document.getElementById('btn-restart-game').classList.remove('hidden');
+            } else {
+                document.getElementById('btn-restart-game').classList.add('hidden');
+            }
+        }
+
+        window.resetToLobby = function() {
+            if (!isHost) return;
+            Object.values(gameState.players).forEach(p => {
+                p.role = null;
+                p.alive = true;
+                p.nightChoice = null;
+                p.voteTarget = null;
+            });
+
+            gameState.status = 'LOBBY';
+            gameState.winner = null;
+            gameState.lastEliminated = null;
+            gameState.lastNightKilled = null;
+            addGameLog("عادت المباراة لغرفة الانتظار لتبدأ جولة جديدة.");
+            broadcastState();
+        };
+
+        window.leaveRoom = function() {
+            if (mqttClient) {
+                try { mqttClient.end(); } catch (e) {}
+                mqttClient = null;
+            }
+            if (localChannel) {
+                try { localChannel.close(); } catch (e) {}
+                localChannel = null;
+            }
+
+            isHost = false;
+            roomCode = null;
+
+            document.getElementById('room-badge').classList.add('hidden');
+            document.getElementById('btn-leave-room').classList.add('hidden');
+            hideAllPhaseScreens();
+            document.getElementById('screen-landing').classList.remove('hidden');
+        };
+
+        window.copyRoomCode = function() {
+            if (!gameState || !gameState.code) return;
+            const tempInput = document.createElement("input");
+            tempInput.value = gameState.code;
+            document.body.appendChild(tempInput);
+            tempInput.select();
+            document.execCommand('copy');
+            document.body.removeChild(tempInput);
+            showAlertModal(`تم نسخ رمز الغرفة: (${gameState.code})`);
+        };
+
+        window.toggleRoleModal = function() {
+            const modal = document.getElementById('role-modal');
+            const myPlayer = gameState?.players[myPlayerId];
+            if (!myPlayer || !myPlayer.role) return;
+
+            if (modal.classList.contains('hidden')) {
+                document.getElementById('modal-role-title').innerText = myPlayer.role;
+                const desc = document.getElementById('modal-role-desc');
+                const icon = document.getElementById('modal-role-icon');
+
+                if (myPlayer.role === ROLES.MAFIA) {
+                    icon.innerHTML = `<i class="fa-solid fa-user-ninja text-red-500"></i>`;
+                    desc.innerText = "تختارون ضحيتكم كل ليلة بالسر لتصفيتها. هدفكم القضاء على المواطنين دون أن تكتشفكم الطاولة.";
+                } else if (myPlayer.role === ROLES.DOCTOR) {
+                    icon.innerHTML = `<i class="fa-solid fa-user-doctor text-emerald-400"></i>`;
+                    desc.innerText = "تختار شخصاً واحداً كل ليلة لعلاجه وحمايته. إذا اختارت المافيا نفس الشخص فإنه يعيش وينجو من القتل!";
+                } else if (myPlayer.role === ROLES.MAYOR) {
+                    icon.innerHTML = `<i class="fa-solid fa-user-tie text-indigo-400"></i>`;
+                    desc.innerText = "تسأل اللعبة كل ليلة عن شخص واحد، وتخبرك اللعبة بما إذا كان (شخص صالح أم عنصر مافيا).";
+                } else {
+                    icon.innerHTML = `<i class="fa-solid fa-user-shield text-slate-300"></i>`;
+                    desc.innerText = "مواطن عادي بدون صلاحيات ليلية. دورك يتجلى في التحليل وحوار النهار والتصويت لكشف المافيا طردها.";
+                }
+
+                modal.classList.remove('hidden');
+            } else {
+                modal.classList.add('hidden');
+            }
+        };
+
+        window.showAlertModal = function(msg) {
+            document.getElementById('modal-alert-text').innerText = msg;
+            document.getElementById('custom-modal').classList.remove('hidden');
+        };
+
+        window.closeAlertModal = function() {
+            document.getElementById('custom-modal').classList.add('hidden');
+        };
+
+        function escapeHtml(str) {
+            return str ? str.replace(/[&<>"']/g, function(m) {
+                return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[m];
+            }) : '';
+        }
+    </script>
+</body>
+</html>
