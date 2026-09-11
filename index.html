@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>لعبة المافيا أونلاين - Mafia Online</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;900&display=swap" rel="stylesheet">
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <style>
+        body { font-family: 'Tajawal', sans-serif; background-color: #090a0f; color: #e2e8f0; }
+        .mafia-card { background: linear-gradient(145deg, #131722, #0d0f17); border: 1px solid rgba(239, 68, 68, 0.2); box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.8); }
+        .glow-red { box-shadow: 0 0 20px rgba(220, 38, 38, 0.3); }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between p-4 md:p-8 select-none">
+
+    <header class="text-center py-4 mb-4 border-b border-red-900/40">
+        <h1 class="text-3xl md:text-5xl font-black tracking-wider text-red-600 flex items-center justify-center gap-3">
+            <i class="fa-solid fa-user-secret"></i> لعبة المافيا أونلاين
+        </h1>
+        <p class="text-xs md:text-sm text-gray-400 mt-1">متصل بالسيرفر الخاص بك لحظياً</p>
+    </header>
+
+    <main class="max-w-3xl mx-auto w-full flex-grow flex flex-col justify-center">
+
+        <!-- JOIN / CREATE ROOM SCREEN -->
+        <div id="screen-login" class="mafia-card p-6 rounded-2xl glow-red space-y-6">
+            <div class="text-center">
+                <h2 class="text-2xl font-bold text-white mb-2"><i class="fa-solid fa-gamepad text-red-500 ml-2"></i>الدخول للغرفة</h2>
+                <p class="text-gray-400 text-sm">أدخل اسمك ورقم الغرفة للعب مع أصحابك أونلاين</p>
+            </div>
+
+            <div class="space-y-4">
+                <div>
+                    <label class="text-xs text-gray-400 mb-1 block">اسمك في اللعبة:</label>
+                    <input type="text" id="player-name" placeholder="اكتب اسمك هنا..." 
+                           class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-red-500">
+                </div>
+                <div>
+                    <label class="text-xs text-gray-400 mb-1 block">كود الغرفة (Room Code):</label>
+                    <input type="text" id="room-id" placeholder="مثال: 1234" 
+                           class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-red-500">
+                </div>
+                <button onclick="joinRoom()" class="w-full bg-red-700 hover:bg-red-600 text-white font-bold py-4 rounded-xl text-lg transition">
+                    <i class="fa-solid fa-right-to-bracket ml-2"></i> دخول الغرفة
+                </button>
+            </div>
+        </div>
+
+        <!-- LOBBY SCREEN -->
+        <div id="screen-lobby" class="hidden mafia-card p-6 rounded-2xl space-y-6 text-center">
+            <h2 class="text-2xl font-bold text-white">غرفة الانتظار (<span id="display-room-id" class="text-red-500">--</span>)</h2>
+            <p class="text-gray-400 text-sm">اللاعبون المتصلون الآن في هذه الغرفة:</p>
+
+            <div id="online-players-list" class="flex flex-wrap justify-center gap-2 py-4"></div>
+
+            <button id="start-btn" onclick="startGame()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-4 rounded-xl text-lg transition">
+                <i class="fa-solid fa-play ml-2"></i> بدء اللعبة وتوزيع الأدوار
+            </button>
+        </div>
+
+        <!-- GAME SCREEN (ROLE ASSIGNMENT) -->
+        <div id="screen-game" class="hidden mafia-card p-8 rounded-2xl space-y-6 text-center glow-red">
+            <h2 class="text-xl text-gray-300">دورك في الجولة الحالية هو:</h2>
+            <div id="role-title" class="text-4xl font-black my-4 py-4 rounded-xl border border-red-500/50 bg-slate-900/80">
+                --
+            </div>
+            <p id="role-desc" class="text-sm text-gray-400">انتظر تعليمات المضيف أو بدء السيرفر...</p>
+        </div>
+
+    </main>
+
+    <script>
+        const SERVER_URL = "https://mafia-server-production-0766.up.railway.app";
+        const socket = io(SERVER_URL);
+
+        let currentRoom = "";
+        let myName = "";
+
+        socket.on("connect", () => {
+            console.log("تم الاتصال بالسيرفر بنجاح!");
+        });
+
+        function joinRoom() {
+            const nameInput = document.getElementById("player-name").value.trim();
+            const roomInput = document.getElementById("room-id").value.trim();
+
+            if (!nameInput || !roomInput) {
+                alert("يرجى إدخال اسمك وكود الغرفة!");
+                return;
+            }
+
+            myName = nameInput;
+            currentRoom = roomInput;
+
+            socket.emit("joinRoom", { roomId: currentRoom, playerName: myName });
+
+            document.getElementById("screen-login").classList.add("hidden");
+            document.getElementById("screen-lobby").classList.remove("hidden");
+            document.getElementById("display-room-id").innerText = currentRoom;
+        }
+
+        socket.on("updatePlayers", (players) => {
+            const listContainer = document.getElementById("online-players-list");
+            listContainer.innerHTML = players.map(p => `
+                <span class="bg-slate-800 text-white px-4 py-2 rounded-xl border border-red-500/40 text-sm font-bold flex items-center gap-2">
+                    <i class="fa-solid fa-wifi text-emerald-400 text-xs"></i> ${escapeHtml(p.name)}
+                </span>
+            `).join('');
+        });
+
+        function startGame() {
+            socket.emit("startGame", { roomId: currentRoom });
+        }
+
+        socket.on("assignRole", (data) => {
+            document.getElementById("screen-lobby").classList.add("hidden");
+            document.getElementById("screen-game").classList.remove("hidden");
+            
+            const roleContainer = document.getElementById("role-title");
+            const roleDesc = document.getElementById("role-desc");
+
+            if (data.role === 'mafia') {
+                roleContainer.innerText = "🔪 مافيا (Mafia)";
+                roleContainer.className = "text-4xl font-black my-4 py-4 rounded-xl border border-red-600 bg-red-950/40 text-red-500";
+                roleDesc.innerText = "مهمتك التخلص من المواطنين بدون ما حد يكشفك!";
+            } else if (data.role === 'doctor') {
+                roleContainer.innerText = "💉 طبيب (Doctor)";
+                roleContainer.className = "text-4xl font-black my-4 py-4 rounded-xl border border-emerald-600 bg-emerald-950/40 text-emerald-400";
+                roleDesc.innerText = "مهمتك حماية وتطبيب أحد اللاعبين كل جولة!";
+            } else if (data.role === 'detective') {
+                roleContainer.innerText = "🔍 محقق (Detective)";
+                roleContainer.className = "text-4xl font-black my-4 py-4 rounded-xl border border-blue-600 bg-blue-950/40 text-blue-400";
+                roleDesc.innerText = "مهمتك التفتيش والتحقيق في هويات اللاعبين المشتبه فيهم!";
+            } else {
+                roleContainer.innerText = "🧑‍🌾 مواطن (Citizen)";
+                roleContainer.className = "text-4xl font-black my-4 py-4 rounded-xl border border-slate-600 bg-slate-900 text-slate-200";
+                roleDesc.innerText = "استخدم ذكاءك وملاحظتك لكشف المافيا التصويت عليهم!";
+            }
+        });
+
+        function escapeHtml(str) {
+            return str.replace(/[&<>"']/g, function(m) {
+                return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[m];
+            });
+        }
+    </script>
+</body>
+</html>
